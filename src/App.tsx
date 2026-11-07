@@ -6,11 +6,16 @@
 
 import { useState, useCallback, useEffect } from "react";
 import {
-  Flame, X, ChevronRight, ChevronDown, ChevronLeft,
+  ChevronRight, ChevronDown, ChevronLeft,
   Plus, Film, PenLine, Package, CreditCard, Search, MoreHorizontal,
   Home, Users, User, Bell, Headphones, MessageSquare, BookOpen, FileText,
-  Sparkles, Star, Zap, HelpCircle, Download,
+  Sparkles, Star, Zap, HelpCircle, Download, Wrench, Scissors,
 } from "lucide-react";
+
+import BrandLogo from "./components/BrandLogo";
+import SpaceMedallion from "./components/SpaceMedallion";
+import { guardGuestSearch } from "./auth";
+import "./styles/studio.css";
 
 // Import pages
 import LandingPage from "./pages/LandingPage";
@@ -20,6 +25,10 @@ import { OnboardingPage } from "./pages/OnboardingPage";
 import { NewProjectPage } from "./pages/NewProjectPage";
 import UserCenterPage from "./pages/UserCenterPage";
 import CanvasPage from "./pages/CanvasPage";
+import CanvasListPage from "./pages/CanvasListPage";
+import { getCanvases } from "./canvases";
+import SupportWidget from "./components/SupportWidget";
+import ProjectCover from "./components/ProjectCover";
 import CostConfirmPage from "./pages/CostConfirmPage";
 import TeamPage from "./pages/TeamPage";
 import BatchPage from "./pages/BatchPage";
@@ -28,126 +37,23 @@ import DeliveryPage from "./pages/DeliveryPage";
 import UpgradePage from "./pages/UpgradePage";
 import TeamAssetsPage from "./pages/TeamAssetsPage";
 import BillingPage from "./pages/BillingPage";
+import MembershipPage from "./pages/MembershipPage";
+import TaskNotifications, { notificationTasks } from "./components/TaskNotifications";
+import TaskRecordsPage from "./pages/TaskRecordsPage";
 import { USER, PROJECT } from "./shared";
-import { getWallet } from "./billing";
+import { getWallet, subscribeWallet } from "./billing";
 import type { Nav as NavType, PageId } from "./shared";
 
 // ─── Sidebar Nav (Make AppLayout SIDEBAR_NAV) ────────────────────────────────
 const SIDEBAR_NAV: { id: PageId | null; label: string; icon: typeof Home }[] = [
   { id: "workspace",     label: "创作", icon: Home       },
-  { id: "canvas",        label: "画布", icon: PenLine    },
   { id: "team-assets",   label: "资产", icon: Package    },
+  { id: "tools",         label: "工具", icon: Wrench     },
   { id: "billing",       label: "账单", icon: CreditCard },
   { id: "team",          label: "团队", icon: Users      },
 ];
 
 const gold = "#FF8A1F";
-
-// ─── Notification Panel (Make 消息通知 4-tab) ────────────────────────────────
-type NotifTab = "task" | "invoice" | "activity" | "error";
-const NOTIFS: Record<NotifTab, { id: string; title: string; body: string; time: string; read: boolean; level?: "info"|"warn"|"error" }[]> = {
-  task: [
-    { id: "t1", title: "批量生成完成",   body: "项目「星际孤途」第1-6集资产已全部生成完毕，共生成 148 张图像。", time: "2分钟前",  read: false },
-    { id: "t2", title: "脚本解析完成",   body: "《隐秘角落》上传文件解析成功，识别到 12 个场景、8 名角色。",         time: "15分钟前", read: false },
-    { id: "t3", title: "音频合成中",     body: "林凯·标准音色正在合成，预计完成时间 3 分钟。",                       time: "23分钟前", read: true  },
-    { id: "t4", title: "导出任务完成",   body: "分集剧本 EP01-EP06 已打包完成，点击下载。",                         time: "1小时前",  read: true  },
-  ],
-  invoice: [
-    { id: "i1", title: "发票申请待审核", body: "您于 2026-08-30 申请的 ¥299.00 增值税普通发票正在审核中，预计 3 个工作日内完成。", time: "2天前",  read: false },
-    { id: "i2", title: "发票已开具",     body: "¥1999.00 电子发票已开具，发票号 044031900115，已发送至注册邮箱。",                    time: "7天前",  read: true  },
-    { id: "i3", title: "发票申请成功",   body: "¥3999.00 制作团队版套餐发票申请已提交，税号已验证。",                                          time: "14天前", read: true  },
-  ],
-  activity: [
-    { id: "a1", title: "限时活动 · 双倍星石", body: "9月1日-9月7日充值享双倍星石奖励，活动剩余 5 天！", time: "刚刚",  read: false, level: "info" },
-    { id: "a2", title: "新功能上线 · AI 改写", body: "提示词编辑器新增 AI 智能改写功能，一键优化生成效果。", time: "3天前",  read: false, level: "info" },
-    { id: "a3", title: "套餐即将到期",         body: "您的个人创作版套餐将于 9月15日 到期，续费可保留所有历史数据。", time: "5天前",  read: false, level: "warn" },
-    { id: "a4", title: "系统维护通知",         body: "2026-09-05 02:00-04:00 进行系统维护，期间服务暂停。",       time: "6天前",  read: true,  level: "info" },
-  ],
-  error: [
-    { id: "e1", title: "生成失败 · 保险箱", body: "资产「保险箱」生成超时，Flux 1.1 Pro 服务异常，已自动重试 3 次。请稍后手动重试。", time: "30分钟前", read: false, level: "error" },
-    { id: "e2", title: "上传失败",         body: "文件「剧本_最终版v3.docx」上传失败，文件大小超过 50MB 限制。",                   time: "2小时前",  read: false, level: "error" },
-    { id: "e3", title: "支付异常",         body: "订单 #2026083112 支付结果异常，若已扣款请联系客服处理。",                         time: "1天前",    read: true,  level: "warn"  },
-  ],
-};
-const NOTIF_TABS: { k: NotifTab; label: string; icon: string }[] = [
-  { k: "task",     label: "任务", icon: "📋" },
-  { k: "invoice",  label: "开票", icon: "🧾" },
-  { k: "activity", label: "活动", icon: "🎉" },
-  { k: "error",    label: "报错", icon: "⚠️" },
-];
-
-function NotificationPanel({ onClose }: { onClose: () => void }) {
-  const [tab, setTab] = useState<NotifTab>("task");
-  const unread = Object.values(NOTIFS).flat().filter(n => !n.read).length;
-  return (
-    <div style={{
-      position: "fixed", left: 72, bottom: 12, zIndex: 199, width: 360, maxHeight: 520,
-      background: "#111218", border: "1px solid rgba(255,255,255,.1)", borderRadius: 18,
-      boxShadow: "0 24px 80px rgba(0,0,0,.8)", display: "flex", flexDirection: "column", overflow: "hidden",
-    }}>
-      <div style={{ display: "flex", alignItems: "center", padding: "14px 16px 0", gap: 8, flexShrink: 0 }}>
-        <span style={{ fontSize: 14, fontWeight: 800, color: "white", flex: 1 }}>消息通知</span>
-        {unread > 0 && <span style={{ fontSize: 11, color: "rgba(255,255,255,.35)", fontWeight: 500 }}>{unread} 条未读</span>}
-        <button onClick={onClose} style={{ width: 24, height: 24, borderRadius: 7, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,.07)", border: "1px solid rgba(255,255,255,.1)", color: "rgba(255,255,255,.4)", cursor: "pointer" }}>
-          <X style={{ width: 11, height: 11 }} />
-        </button>
-      </div>
-      <div style={{ display: "flex", gap: 4, padding: "10px 12px 0", flexShrink: 0 }}>
-        {NOTIF_TABS.map(t => {
-          const cnt = NOTIFS[t.k].filter(n => !n.read).length;
-          const active = tab === t.k;
-          return (
-            <button key={t.k} onClick={() => setTab(t.k)}
-              style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", gap: 4, padding: "6px 4px", borderRadius: 9, fontSize: 11, fontWeight: active ? 700 : 400, cursor: "pointer",
-                background: active ? "rgba(255,138,31,.12)" : "rgba(255,255,255,.04)",
-                border: `1px solid ${active ? "rgba(255,138,31,.3)" : "rgba(255,255,255,.07)"}`,
-                color: active ? "rgba(255,138,31,.95)" : "rgba(255,255,255,.4)" }}>
-              <span style={{ fontSize: 12 }}>{t.icon}</span>
-              {t.label}
-              {cnt > 0 && <span style={{ minWidth: 14, height: 14, borderRadius: 7, background: "#EF4444", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 8, fontWeight: 700, color: "white", padding: "0 2px" }}>{cnt}</span>}
-            </button>
-          );
-        })}
-      </div>
-      <div style={{ flex: 1, overflowY: "auto", padding: "8px 10px 10px", display: "flex", flexDirection: "column", gap: 5, marginTop: 4 }}>
-        {NOTIFS[tab].length === 0 ? (
-          <div style={{ textAlign: "center", padding: "32px 0", fontSize: 13, color: "rgba(255,255,255,.2)" }}>暂无消息</div>
-        ) : (
-          NOTIFS[tab].map(n => {
-            const accentColor =
-              n.level === "error" ? "#EF4444" :
-              n.level === "warn"  ? "#F59E0B" :
-              tab === "invoice"   ? "#60A5FA" :
-              tab === "activity"  ? "rgba(255,138,31,.9)" :
-                                    "rgba(255,255,255,.55)";
-            return (
-              <div key={n.id}
-                style={{ padding: "10px 12px", borderRadius: 11,
-                  background: n.read ? "rgba(255,255,255,.025)" : "rgba(255,255,255,.055)",
-                  border: `1px solid ${n.read ? "rgba(255,255,255,.06)" : "rgba(255,255,255,.1)"}`,
-                  position: "relative", cursor: "pointer", transition: "background .12s" }}
-                onMouseEnter={e => (e.currentTarget.style.background = "rgba(255,255,255,.075)")}
-                onMouseLeave={e => (e.currentTarget.style.background = n.read ? "rgba(255,255,255,.025)" : "rgba(255,255,255,.055)")}>
-                {!n.read && <span style={{ position: "absolute", top: 10, right: 10, width: 6, height: 6, borderRadius: "50%", background: accentColor }} />}
-                <div style={{ fontSize: 12.5, fontWeight: n.read ? 500 : 700, color: n.read ? "rgba(255,255,255,.6)" : "rgba(255,255,255,.92)", marginBottom: 4, paddingRight: 12 }}>{n.title}</div>
-                <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.38)", lineHeight: 1.65 }}>{n.body}</div>
-                <div style={{ fontSize: 10.5, color: "rgba(255,255,255,.22)", marginTop: 5 }}>{n.time}</div>
-              </div>
-            );
-          })
-        )}
-      </div>
-      <div style={{ display: "flex", alignItems: "center", gap: 8, padding: "10px 14px", borderTop: "1px solid rgba(255,255,255,.06)", flexShrink: 0 }}>
-        <button style={{ flex: 1, padding: "7px 0", borderRadius: 9, fontSize: 12, cursor: "pointer", background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.09)", color: "rgba(255,255,255,.45)" }}>
-          全部标记已读
-        </button>
-        <button style={{ flex: 1, padding: "7px 0", borderRadius: 9, fontSize: 12, cursor: "pointer", background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.09)", color: "rgba(255,255,255,.45)" }}>
-          查看全部消息
-        </button>
-      </div>
-    </div>
-  );
-}
 
 // ─── QR Modal (客服微信二维码 — Make) ──────────────────────────────────────────
 function QRModal({ onClose }: { onClose: () => void }) {
@@ -210,80 +116,6 @@ function QRModal({ onClose }: { onClose: () => void }) {
   );
 }
 
-// ─── Feedback Modal (Make 提交问题申请反馈) ───────────────────────────────────
-function FeedbackModal({ onClose }: { onClose: () => void }) {
-  const [type, setType] = useState<"bug" | "suggest" | "other">("bug");
-  const [text, setText] = useState("");
-  const [sent, setSent] = useState(false);
-  return (
-    <div style={{ position: "fixed", inset: 0, zIndex: 600, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,.75)", backdropFilter: "blur(16px)" }}
-      onClick={e => { if (e.target === e.currentTarget) onClose(); }}>
-      <div style={{ width: "min(480px,94vw)", background: "#111218", border: "1px solid rgba(255,255,255,.1)", borderRadius: 20, overflow: "hidden", boxShadow: "0 30px 80px rgba(0,0,0,.85)" }}>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, padding: "18px 20px", borderBottom: "1px solid rgba(255,255,255,.07)" }}>
-          <MessageSquare style={{ width: 16, height: 16, color: "rgba(255,138,31,.8)" }} />
-          <span style={{ fontSize: 14, fontWeight: 700, color: "white", flex: 1 }}>提交问题 · 申请反馈</span>
-          <button onClick={onClose} style={{ width: 28, height: 28, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(255,255,255,.07)", border: "1px solid rgba(255,255,255,.1)", color: "rgba(255,255,255,.45)", cursor: "pointer" }}>
-            <X style={{ width: 13, height: 13 }} />
-          </button>
-        </div>
-        {sent ? (
-          <div style={{ padding: "40px 24px", textAlign: "center" }}>
-            <div style={{ fontSize: 36, marginBottom: 12 }}>✅</div>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "white", marginBottom: 6 }}>反馈已提交</div>
-            <div style={{ fontSize: 13, color: "rgba(255,255,255,.4)", marginBottom: 20 }}>感谢你的反馈，我们会尽快跟进处理！</div>
-            <button onClick={onClose} style={{ padding: "8px 28px", borderRadius: 10, fontSize: 13, fontWeight: 600, cursor: "pointer", background: "rgba(255,255,255,.07)", border: "1px solid rgba(255,255,255,.12)", color: "rgba(255,255,255,.6)" }}>
-              关闭
-            </button>
-          </div>
-        ) : (
-          <div style={{ padding: "18px 20px", display: "flex", flexDirection: "column", gap: 14 }}>
-            <div>
-              <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.4)", fontWeight: 600, marginBottom: 8 }}>反馈类型</div>
-              <div style={{ display: "flex", gap: 6 }}>
-                {([["bug", "🐛", "报告 Bug"], ["suggest", "💡", "功能建议"], ["other", "💬", "其他问题"]] as const).map(([k, emoji, label]) => (
-                  <button key={k} onClick={() => setType(k)}
-                    style={{ flex: 1, padding: "7px 4px", borderRadius: 9, fontSize: 12, cursor: "pointer", fontWeight: type === k ? 700 : 400,
-                      background: type === k ? "rgba(255,138,31,.1)" : "rgba(255,255,255,.04)",
-                      border: `1px solid ${type === k ? "rgba(255,138,31,.3)" : "rgba(255,255,255,.08)"}`,
-                      color: type === k ? "rgba(255,138,31,.95)" : "rgba(255,255,255,.4)" }}>
-                    {emoji} {label}
-                  </button>
-                ))}
-              </div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.4)", fontWeight: 600, marginBottom: 8 }}>
-                {type === "bug" ? "问题描述（请尽量详细）" : type === "suggest" ? "建议内容" : "反馈内容"}
-              </div>
-              <textarea value={text} onChange={e => setText(e.target.value)} autoFocus
-                placeholder={type === "bug" ? "请描述问题出现的步骤、页面位置及现象…" : type === "suggest" ? "请描述你希望实现的功能或改进方向…" : "请填写你的问题或意见…"}
-                style={{ width: "100%", background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.09)", borderRadius: 11, padding: "12px 14px", fontSize: 13, color: "rgba(255,255,255,.85)", outline: "none", resize: "none", lineHeight: 1.75, fontFamily: "inherit", boxSizing: "border-box", height: 130, display: "block" }} />
-              <div style={{ textAlign: "right", fontSize: 11, color: "rgba(255,255,255,.2)", marginTop: 4 }}>{text.length} / 500</div>
-            </div>
-            <div>
-              <div style={{ fontSize: 11.5, color: "rgba(255,255,255,.4)", fontWeight: 600, marginBottom: 8 }}>联系方式（选填）</div>
-              <input placeholder="邮箱或手机号，方便我们回复你"
-                style={{ width: "100%", background: "rgba(255,255,255,.04)", border: "1px solid rgba(255,255,255,.09)", borderRadius: 10, padding: "9px 13px", fontSize: 13, color: "rgba(255,255,255,.8)", outline: "none", boxSizing: "border-box" }} />
-            </div>
-            <div style={{ display: "flex", gap: 8, paddingTop: 2 }}>
-              <button onClick={onClose}
-                style={{ flex: 1, padding: "10px 0", borderRadius: 11, fontSize: 13, cursor: "pointer", background: "rgba(255,255,255,.05)", border: "1px solid rgba(255,255,255,.09)", color: "rgba(255,255,255,.45)" }}>
-                取消
-              </button>
-              <button onClick={() => { if (text.trim()) setSent(true); }} disabled={!text.trim()}
-                style={{ flex: 2, padding: "10px 0", borderRadius: 11, fontSize: 13, fontWeight: 700, cursor: text.trim() ? "pointer" : "not-allowed",
-                  background: text.trim() ? "linear-gradient(135deg,#FF8A1F,#FF5A1F)" : "rgba(255,255,255,.06)",
-                  border: "none", color: text.trim() ? "black" : "rgba(255,255,255,.2)" }}>
-                提交反馈
-              </button>
-            </div>
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 // ─── Space Picker Modal (Make 工作空间切换) ──────────────────────────────────
 function SpacePickerModal({ currentSpace, onConfirm, onClose }: {
   currentSpace: "personal" | "team";
@@ -293,11 +125,11 @@ function SpacePickerModal({ currentSpace, onConfirm, onClose }: {
   return (
     <div style={{ position: "fixed", inset: 0, zIndex: 900, display: "flex", alignItems: "center", justifyContent: "center", background: "rgba(0,0,0,.72)", backdropFilter: "blur(12px)" }}
       onClick={onClose}>
-      <div onClick={e => e.stopPropagation()}
+      <div className="studio-space-dialog" role="dialog" aria-label="切换工作空间" onClick={e => e.stopPropagation()}
         style={{ width: 480, background: "#13141B", borderRadius: 24, border: "1px solid rgba(255,255,255,.08)", boxShadow: "0 32px 80px rgba(0,0,0,.8)", overflow: "hidden" }}>
         <div style={{ padding: "28px 32px 0", textAlign: "center" }}>
           <div style={{ width: 40, height: 40, borderRadius: 12, background: "#FF8A1F", display: "inline-flex", alignItems: "center", justifyContent: "center", marginBottom: 14 }}>
-            <Flame style={{ width: 18, height: 18, color: "black" }} />
+            <BrandLogo size={40}/>
           </div>
           <div style={{ fontSize: 18, fontWeight: 700, color: "white", marginBottom: 6 }}>切换工作空间</div>
           <div style={{ fontSize: 13, color: "rgba(255,255,255,.4)", lineHeight: 1.6 }}>
@@ -305,16 +137,14 @@ function SpacePickerModal({ currentSpace, onConfirm, onClose }: {
           </div>
         </div>
         <div style={{ display: "flex", gap: 14, padding: "24px 28px 28px" }}>
-          <button onClick={() => onConfirm("personal")}
+          <button className="studio-space-option studio-space-option-personal" aria-pressed={currentSpace === "personal"} onClick={() => onConfirm("personal")}
             style={{ flex: 1, padding: "22px 18px", borderRadius: 16, cursor: "pointer", textAlign: "left",
               border: `2px solid ${currentSpace === "personal" ? "#60a5fa" : "rgba(255,255,255,.08)"}`,
               background: currentSpace === "personal" ? "rgba(96,165,250,.08)" : "rgba(255,255,255,.03)",
               transition: "all .15s", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}
             onMouseEnter={e => { if (currentSpace !== "personal") { e.currentTarget.style.borderColor = "rgba(96,165,250,.4)"; e.currentTarget.style.background = "rgba(96,165,250,.04)"; } }}
             onMouseLeave={e => { if (currentSpace !== "personal") { e.currentTarget.style.borderColor = "rgba(255,255,255,.08)"; e.currentTarget.style.background = "rgba(255,255,255,.03)"; } }}>
-            <div style={{ width: 52, height: 52, borderRadius: 16, background: "rgba(96,165,250,.15)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-              <User style={{ width: 22, height: 22, color: "#60a5fa" }} />
-            </div>
+            <SpaceMedallion space="personal" size={72}/>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 14.5, fontWeight: 700, color: "white", marginBottom: 4 }}>个人空间</div>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,.35)", lineHeight: 1.5 }}>{USER.name}<br />{getWallet("personal").rechargeStars.toLocaleString()} 充值积分（个人钱包）</div>
@@ -323,16 +153,14 @@ function SpacePickerModal({ currentSpace, onConfirm, onClose }: {
               <div style={{ fontSize: 11, fontWeight: 700, color: "#60a5fa", background: "rgba(96,165,250,.12)", borderRadius: 100, padding: "3px 10px" }}>当前空间</div>
             )}
           </button>
-          <button onClick={() => onConfirm("team")}
+          <button className="studio-space-option studio-space-option-team" aria-pressed={currentSpace === "team"} onClick={() => onConfirm("team")}
             style={{ flex: 1, padding: "22px 18px", borderRadius: 16, cursor: "pointer", textAlign: "left",
               border: `2px solid ${currentSpace === "team" ? "#a78bfa" : "rgba(255,255,255,.08)"}`,
               background: currentSpace === "team" ? "rgba(139,92,246,.08)" : "rgba(255,255,255,.03)",
               transition: "all .15s", display: "flex", flexDirection: "column", alignItems: "center", gap: 12 }}
             onMouseEnter={e => { if (currentSpace !== "team") { e.currentTarget.style.borderColor = "rgba(139,92,246,.4)"; e.currentTarget.style.background = "rgba(139,92,246,.04)"; } }}
             onMouseLeave={e => { if (currentSpace !== "team") { e.currentTarget.style.borderColor = "rgba(255,255,255,.08)"; e.currentTarget.style.background = "rgba(255,255,255,.03)"; } }}>
-            <div style={{ width: 52, height: 52, borderRadius: 16, background: "rgba(139,92,246,.15)", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 800, color: "#a78bfa" }}>
-              {USER.team[0]}
-            </div>
+            <SpaceMedallion space="team" size={72}/>
             <div style={{ textAlign: "center" }}>
               <div style={{ fontSize: 14.5, fontWeight: 700, color: "white", marginBottom: 4 }}>{USER.team}</div>
               <div style={{ fontSize: 12, color: "rgba(255,255,255,.35)", lineHeight: 1.5 }}>团队空间<br />{getWallet("team").rechargeStars.toLocaleString()} 充值积分（团队钱包）</div>
@@ -362,7 +190,7 @@ function Sidebar({ currentPage, currentSpace, onNavigate, onSpacePick, onNotifTo
   serviceOpen: boolean;
 }) {
   return (
-    <aside style={{
+    <aside className="studio-sidebar" style={{
       width: 68, flexShrink: 0,
       display: "flex", flexDirection: "column", alignItems: "center",
       background: "#0E0F14",
@@ -375,13 +203,13 @@ function Sidebar({ currentPage, currentSpace, onNavigate, onSpacePick, onNotifTo
         onMouseEnter={e => { (e.currentTarget.firstElementChild as HTMLElement).style.opacity = "0.8"; }}
         onMouseLeave={e => { (e.currentTarget.firstElementChild as HTMLElement).style.opacity = "1"; }}>
         <div style={{ width: 32, height: 32, borderRadius: 9, display: "flex", alignItems: "center", justifyContent: "center", background: "#FF8A1F", transition: "opacity .15s" }}>
-          <Flame style={{ width: 15, height: 15, color: "black" }} />
+          <BrandLogo size={32}/>
         </div>
       </button>
 
       {/* Space switcher */}
       <div style={{ width: "100%", display: "flex", justifyContent: "center", marginBottom: 6 }}>
-        <button onClick={onSpacePick}
+        <button className={`studio-space-medallion studio-space-${currentSpace}`} onClick={onSpacePick}
           title={currentSpace === "team" ? `团队空间：${USER.team}` : "个人空间"}
           style={{
             width: 40, height: 40, borderRadius: 11, border: "none", cursor: "pointer",
@@ -391,9 +219,7 @@ function Sidebar({ currentPage, currentSpace, onNavigate, onSpacePick, onNotifTo
           }}
           onMouseEnter={e => (e.currentTarget.style.background = currentSpace === "team" ? "rgba(139,92,246,.25)" : "rgba(96,165,250,.22)")}
           onMouseLeave={e => (e.currentTarget.style.background = currentSpace === "team" ? "rgba(139,92,246,.15)" : "rgba(96,165,250,.12)")}>
-          {currentSpace === "team"
-            ? <Users style={{ width: 14, height: 14, color: "#a78bfa" }} />
-            : <User  style={{ width: 14, height: 14, color: "#60a5fa" }} />}
+          <SpaceMedallion space={currentSpace} size={46}/>
           <span style={{ fontSize: 8, fontWeight: 700, color: currentSpace === "team" ? "#a78bfa" : "#60a5fa", letterSpacing: "0.02em" }}>
             {currentSpace === "team" ? "团队" : "个人"}
           </span>
@@ -404,11 +230,12 @@ function Sidebar({ currentPage, currentSpace, onNavigate, onSpacePick, onNotifTo
 
       {/* Nav */}
       <nav style={{ flex: 1, width: "100%", display: "flex", flexDirection: "column", alignItems: "center", gap: 2, padding: "0 8px", overflowY: "auto" }}>
-        {SIDEBAR_NAV.map(item => {
-          const active = !!(item.id && currentPage === item.id);
+        {SIDEBAR_NAV.filter(entry => currentSpace === "team" || entry.id !== "team").map(entry => {
+          const item = entry.id === "my-tasks" && currentSpace === "team" ? { ...entry, id: "team-tasks" as const } : entry;
+          const active = !!(item.id && (currentPage === item.id || (item.id === "team" && currentPage === "team-tasks")));
           const clickable = !!item.id;
           return (
-            <button key={item.label} onClick={() => item.id && onNavigate(item.id as PageId)} title={item.label}
+            <button className="studio-nav-item" aria-current={active ? "page" : undefined} data-nav={item.id} key={item.label} onClick={() => item.id && onNavigate(item.id as PageId)} title={item.label}
               style={{
                 width: "100%", display: "flex", flexDirection: "column", alignItems: "center",
                 gap: 4, padding: "9px 0", borderRadius: 8,
@@ -417,8 +244,7 @@ function Sidebar({ currentPage, currentSpace, onNavigate, onSpacePick, onNotifTo
                 background: active ? "rgba(255,138,31,0.10)" : "transparent",
                 position: "relative",
                 opacity: clickable ? 1 : 0.35,
-              }}
-              onMouseEnter={e => { if (!active && clickable) e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
+              }}              onMouseEnter={e => { if (!active && clickable) e.currentTarget.style.background = "rgba(255,255,255,0.05)"; }}
               onMouseLeave={e => { e.currentTarget.style.background = active ? "rgba(255,138,31,0.10)" : "transparent"; }}>
               {active && (
                 <span style={{ position: "absolute", left: 0, top: "50%", transform: "translateY(-50%)", width: 2, height: 20, background: "#FF8A1F", borderRadius: "0 2px 2px 0" }} />
@@ -539,21 +365,26 @@ function HelpPopup({ onOpenService, onOpenFeedback, onClose }: {
 }
 
 // ─── App Header (Make 状态条 + 会员积分 + 客服) ───────────────────────────────
-function AppHeader({ currentSpace, onSpacePick, onOpenService }: {
+function AppHeader({ currentSpace, onSpacePick, onMembership }: {
   currentSpace: "personal" | "team";
   onSpacePick: () => void;
-  onOpenService: () => void;
+  onMembership: () => void;
 }) {
+  const [, refreshWallet] = useState(0);
+  useEffect(() => subscribeWallet(() => refreshWallet(version => version + 1)), []);
+  const { rechargeStars } = getWallet(currentSpace);
+  const activeStars = currentSpace === "team" ? USER.teamActiveStars : USER.activeStars;
+
   return (
-    <header style={{
+    <header className="studio-header" style={{
       height: 60, flexShrink: 0, display: "flex", alignItems: "center",
       padding: "0 20px", gap: 8,
       background: "#090A0E",
       borderBottom: "1px solid rgba(255,255,255,0.05)",
     }}>
       {/* Status strip */}
-      <div style={{
-        display: "flex", alignItems: "center", gap: 7, flexShrink: 0,
+      <div className="studio-status" style={{
+        display: "flex", alignItems: "center", gap: 7, minWidth: 0, overflowX: "auto", scrollbarWidth: "none",
         background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.07)",
         borderRadius: 8, padding: "0 14px", height: 30,
         whiteSpace: "nowrap",
@@ -578,43 +409,48 @@ function AppHeader({ currentSpace, onSpacePick, onOpenService }: {
           {USER.concurrent.used}<span style={{ color: "rgba(255,255,255,0.25)", fontWeight: 400 }}>/{USER.concurrent.total}</span>
         </span>
         <div style={{ width: 1, height: 12, background: "rgba(255,255,255,0.1)", flexShrink: 0 }} />
-        <Star style={{ width: 10, height: 10, color: "#FF8A1F", flexShrink: 0 } as React.CSSProperties} />
-        <span style={{ fontSize: 11, fontWeight: 600, color: "#FF8A1F" }}>
-          {(currentSpace === "team" ? getWallet("team").rechargeStars : getWallet("personal").rechargeStars).toLocaleString()}
-        </span>
-        <span style={{ fontSize: 10, color: "rgba(255,255,255,0.25)" }}>
-          {currentSpace === "team" ? "团队钱包" : "个人钱包"}
+        <span role="group" aria-label={currentSpace === "team" ? "团队钱包" : "个人钱包"}
+          style={{ display: "inline-flex", alignItems: "center", gap: 7, fontSize: 11, color: "rgba(255,255,255,.58)" }}>
+          <Star aria-hidden="true" size={11} color={gold} />
+          <span>{currentSpace === "team" ? "团队钱包" : "个人钱包"}</span>
+          <span>付费星石 <b style={{ color: gold }}>{rechargeStars.toLocaleString()}</b></span>
+          <span>活动星石 <b style={{ color: "#F4F5F7" }}>{activeStars.toLocaleString()}</b></span>
         </span>
       </div>
 
       <div style={{ flex: 1 }} />
 
-      <button style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 8px", height: 28, background: "none", border: "none", color: "#FF8A1F", fontSize: 11.5, fontWeight: 500, cursor: "pointer", opacity: 0.85, transition: "opacity .15s", flexShrink: 0 }}
+      <button onClick={onMembership} style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 8px", height: 28, background: "none", border: "none", color: "#FF8A1F", fontSize: 11.5, fontWeight: 500, cursor: "pointer", opacity: 0.85, transition: "opacity .15s", flexShrink: 0 }}
         onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
         onMouseLeave={e => (e.currentTarget.style.opacity = "0.85")}>
         <Sparkles style={{ width: 11, height: 11 } as React.CSSProperties} />
         会员积分
       </button>
-      <button onClick={onOpenService}
-        style={{ display: "flex", alignItems: "center", gap: 5, padding: "0 8px", height: 28, background: "none", border: "none", color: "rgba(255,255,255,0.38)", fontSize: 11.5, cursor: "pointer", transition: "color .15s", flexShrink: 0 }}
-        onMouseEnter={e => (e.currentTarget.style.color = "rgba(255,255,255,0.65)")}
-        onMouseLeave={e => (e.currentTarget.style.color = "rgba(255,255,255,0.38)")}>
-        <Headphones style={{ width: 11, height: 11 } as React.CSSProperties} />
-        客服
-      </button>
     </header>
   );
 }
 
+function ToolsPage() {
+  return (
+    <section style={{ padding: "24px 28px" }}>
+      <h1 style={{ color: "#F4F5F7", fontSize: 22, marginBottom: 24 }}>工具</h1>
+      <div style={{ maxWidth: 320, padding: 20, borderRadius: 12, color: "#F4F5F7",
+        background: "rgba(255,255,255,.03)", border: "1px solid rgba(255,255,255,.08)" }}>
+        <Scissors size={22} color={gold} />
+        <strong style={{ display: "block", fontSize: 15, marginTop: 14 }}>视频分割</strong>
+        <p style={{ fontSize: 12, opacity: .6, marginTop: 7 }}>按时间拆分视频片段</p>
+        <span style={{ display: "inline-block", marginTop: 14, fontSize: 11, opacity: .5 }}>暂未开放</span>
+      </div>
+    </section>
+  );
+}
+
 // ─── Workspace Page (Make — 早上好 + 开始创作下拉 + 3-统计 + 继续创作 3-tab + 3:4 卡片) ──
-function WorkspacePage({ navigate, onSpacePick }: NavType & { onSpacePick: (dest?: PageId) => void }) {
+function WorkspacePage({ navigate, onSpacePick, currentSpace }: NavType & { onSpacePick: (dest?: PageId) => void; currentSpace: "personal" | "team" }) {
   const [newOpen, setNewOpen] = useState(false);
   const [ccTab, setCcTab] = useState<"all" | "project" | "canvas">("all");
 
-  const CANVASES = [
-    { id: "cv1", name: "星耀制作流程画布", nodes: 7, edges: 6, updated: "今天 14:30", storageDays: 5 },
-    { id: "cv2", name: "《星坠》宣传物料",   nodes: 3, edges: 2, updated: "昨天 09:15", storageDays: 19 },
-  ];
+  const CANVASES = getCanvases(currentSpace);
   const PROJECT_STORAGE_DAYS = 5;
 
   const showProject = ccTab === "all" || ccTab === "project";
@@ -628,12 +464,16 @@ function WorkspacePage({ navigate, onSpacePick }: NavType & { onSpacePick: (dest
   const startNew = (dest: PageId) => { navigate(dest); setNewOpen(false); };
 
   return (
-    <div style={{ padding: "24px 28px", width: "100%", boxSizing: "border-box" }} onClick={() => setNewOpen(false)}>
+    <div className="studio-workspace" style={{ padding: "24px 28px", width: "100%", boxSizing: "border-box" }} onClick={() => setNewOpen(false)}>
       {/* Welcome + CTA */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
+      <div className="studio-welcome" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <h1 style={{ fontSize: 22, fontWeight: 700, color: "#F4F5F7", letterSpacing: "-0.03em", margin: 0, lineHeight: 1.15 }}>
           早上好，{USER.name}
         </h1>
+        {currentSpace === "personal" && <button className="glass-btn" onClick={() => navigate("my-tasks")}
+          style={{ marginLeft: "auto", marginRight: 12, padding: "8px 16px", borderRadius: 10, color: "#F4F5F7", cursor: "pointer" }}>
+          我的任务
+        </button>}
         <div style={{ position: "relative" }} onClick={e => e.stopPropagation()}>
           <button onClick={() => setNewOpen(o => !o)} className="glass-btn"
             style={{ display: "flex", alignItems: "center", gap: 7, padding: "8px 18px", borderRadius: 10, fontSize: 13, fontWeight: 500, color: "#F4F5F7", border: "none", cursor: "pointer" }}>
@@ -666,7 +506,7 @@ function WorkspacePage({ navigate, onSpacePick }: NavType & { onSpacePick: (dest
       </div>
 
       {/* Stats strip */}
-      <div style={{ display: "flex", alignItems: "center", borderTop: "1px solid rgba(255,255,255,0.05)", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "14px 0", marginBottom: 28, gap: 0, flexWrap: "nowrap" }}>
+      <div className="studio-workspace-stats" style={{ display: "flex", alignItems: "center", borderTop: "1px solid rgba(255,255,255,0.05)", borderBottom: "1px solid rgba(255,255,255,0.05)", padding: "14px 0", marginBottom: 28, gap: 0, flexWrap: "nowrap" }}>
         {([
           { value: "148",   unit: "条", label: "本月视频", color: "#FF8A1F" },
           { value: "3,241", unit: "颗", label: "星石消耗", color: "#FFB84D" },
@@ -687,12 +527,12 @@ function WorkspacePage({ navigate, onSpacePick }: NavType & { onSpacePick: (dest
       </div>
 
       {/* Continue creating header */}
-      <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
+      <div className="studio-continue-heading" style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 14 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
           <span style={{ fontSize: 10, fontWeight: 600, color: "#6F7480", textTransform: "uppercase", letterSpacing: "0.09em" }}>继续创作</span>
           <div style={{ display: "flex", gap: 2, background: "rgba(255,255,255,0.04)", borderRadius: 6, padding: "2px" }}>
             {([["all", "全部"], ["project", "剧目"], ["canvas", "画布"]] as const).map(([id, label]) => (
-              <button key={id} onClick={() => setCcTab(id)}
+              <button key={id} aria-pressed={ccTab === id} onClick={() => setCcTab(id)}
                 style={{ fontSize: 11, padding: "3px 10px", borderRadius: 5, border: "none", cursor: "pointer", transition: "all .15s",
                   background: ccTab === id ? "rgba(255,138,31,0.15)" : "transparent",
                   color: ccTab === id ? gold : "rgba(255,255,255,0.4)", fontWeight: ccTab === id ? 500 : 400 }}>
@@ -701,21 +541,21 @@ function WorkspacePage({ navigate, onSpacePick }: NavType & { onSpacePick: (dest
             ))}
           </div>
         </div>
-        <button onClick={() => navigate("projects")}
+        <button onClick={() => navigate("projects", { kind: ccTab === "canvas" ? "canvas" : null })}
           style={{ fontSize: 11.5, color: gold, display: "flex", alignItems: "center", gap: 3, background: "none", border: "none", cursor: "pointer", opacity: 0.7 }}
           onMouseEnter={e => (e.currentTarget.style.opacity = "1")}
           onMouseLeave={e => (e.currentTarget.style.opacity = "0.7")}>
-          全部剧目<ChevronRight style={{ width: 11, height: 11 } as React.CSSProperties} />
+          {ccTab === "canvas" ? "全部画布" : "全部剧目"}<ChevronRight style={{ width: 11, height: 11 } as React.CSSProperties} />
         </button>
       </div>
 
       {/* 3:4 Card grid */}
-      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 16 }}>
+      <div className="studio-project-grid" style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(210px, 1fr))", gap: 16 }}>
 
         {showProject && (() => {
           const tier = storageTier(PROJECT_STORAGE_DAYS);
           return (
-            <div
+            <div className="studio-project-card"
               style={{ borderRadius: 12, overflow: "hidden",
                 background: "#13151C",
                 border: tier.urgent ? "1px solid rgba(248,113,113,0.22)" : "1px solid rgba(255,255,255,0.07)",
@@ -723,13 +563,8 @@ function WorkspacePage({ navigate, onSpacePick }: NavType & { onSpacePick: (dest
               onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 12px 36px rgba(0,0,0,0.5)"; }}
               onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.35)"; }}>
               <div style={{ width: "100%", aspectRatio: "3/4", background: "linear-gradient(160deg,#1A1108 0%,#120C04 40%,#0D0A06 100%)", position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 80% 60% at 50% 30%, rgba(255,138,31,0.12) 0%, transparent 70%)", pointerEvents: "none" }} />
-                <div style={{ position: "absolute", inset: 0, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10 }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(255,138,31,0.12)", border: "1px solid rgba(255,138,31,0.22)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <Film style={{ width: 18, height: 18, color: gold } as React.CSSProperties} />
-                  </div>
-                  <span style={{ fontSize: 15, fontWeight: 800, color: "#F4F5F7", letterSpacing: "-0.02em" }}>{PROJECT.name}</span>
-                </div>
+                <ProjectCover name={PROJECT.name} />
+                <strong style={{ position: "absolute", bottom: 18, left: 16, right: 16, color: "#F4F5F7", fontSize: 22 }}>{PROJECT.name}</strong>
                 <div style={{ position: "absolute", top: 9, right: 9 }}>
                   <span style={{ fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 20, background: "rgba(96,165,250,0.15)", color: "#60A5FA", border: "1px solid rgba(96,165,250,0.25)", backdropFilter: "blur(4px)" }}>生成中</span>
                 </div>
@@ -760,7 +595,7 @@ function WorkspacePage({ navigate, onSpacePick }: NavType & { onSpacePick: (dest
         {showCanvas && CANVASES.map(cv => {
           const tier = storageTier(cv.storageDays);
           return (
-            <div key={cv.id} onClick={() => navigate("canvas")}
+            <div key={cv.id} onClick={() => navigate("canvas", { canvas: cv.id })}
               style={{ borderRadius: 12, overflow: "hidden", cursor: "pointer",
                 background: "#13151C",
                 border: tier.urgent ? "1px solid rgba(248,113,113,0.22)" : "1px solid rgba(255,255,255,0.07)",
@@ -768,20 +603,7 @@ function WorkspacePage({ navigate, onSpacePick }: NavType & { onSpacePick: (dest
               onMouseEnter={e => { e.currentTarget.style.transform = "translateY(-3px)"; e.currentTarget.style.boxShadow = "0 12px 36px rgba(0,0,0,0.5)"; }}
               onMouseLeave={e => { e.currentTarget.style.transform = "none"; e.currentTarget.style.boxShadow = "0 4px 20px rgba(0,0,0,0.35)"; }}>
               <div style={{ width: "100%", aspectRatio: "3/4", background: "linear-gradient(160deg,#0E0A14 0%,#090610 40%,#07050D 100%)", position: "relative", overflow: "hidden" }}>
-                <div style={{ position: "absolute", inset: 0, background: "radial-gradient(ellipse 70% 50% at 50% 30%, rgba(167,139,250,0.1) 0%, transparent 70%)", pointerEvents: "none" }} />
-                {[[30, 35], [50, 55], [70, 40], [40, 68], [60, 72]].map(([x, y], i) => (
-                  <div key={i} style={{ position: "absolute", left: `${x}%`, top: `${y}%`, width: 4, height: 4, borderRadius: "50%", background: i === 0 ? "#A78BFA" : "rgba(167,139,250,0.35)", transform: "translate(-50%,-50%)" }} />
-                ))}
-                <svg style={{ position: "absolute", inset: 0, width: "100%", height: "100%" }} viewBox="0 0 100 100" preserveAspectRatio="none">
-                  {([[30, 35, 50, 55], [50, 55, 70, 40], [50, 55, 40, 68], [50, 55, 60, 72]] as [number, number, number, number][]).map(([x1, y1, x2, y2], i) => (
-                    <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(167,139,250,0.18)" strokeWidth="0.8" />
-                  ))}
-                </svg>
-                <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center" }}>
-                  <div style={{ width: 40, height: 40, borderRadius: 11, background: "rgba(167,139,250,0.1)", border: "1px solid rgba(167,139,250,0.2)", display: "flex", alignItems: "center", justifyContent: "center" }}>
-                    <PenLine style={{ width: 18, height: 18, color: "#A78BFA" } as React.CSSProperties} />
-                  </div>
-                </div>
+                <ProjectCover name={cv.name} />
                 <div style={{ position: "absolute", top: 9, right: 9 }}>
                   <span style={{ fontSize: 9, fontWeight: 600, padding: "2px 6px", borderRadius: 20, background: "rgba(167,139,250,0.12)", color: "#A78BFA", border: "1px solid rgba(167,139,250,0.22)", backdropFilter: "blur(4px)" }}>画布</span>
                 </div>
@@ -825,7 +647,7 @@ function ProjectListPage({ navigate, onSpacePick }: NavType & { onSpacePick: (de
   };
 
   return (
-    <div style={{ padding: "24px 28px", width: "100%", boxSizing: "border-box" }}>
+    <div className="studio-project-list" style={{ padding: "24px 28px", width: "100%", boxSizing: "border-box" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 20 }}>
         <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
           <button onClick={() => navigate("workspace")} style={{ display: "flex", alignItems: "center", gap: 4, background: "none", border: "none", color: "rgba(255,255,255,0.4)", cursor: "pointer", fontSize: 13, padding: 0 }}>
@@ -849,13 +671,13 @@ function ProjectListPage({ navigate, onSpacePick }: NavType & { onSpacePick: (de
           const pct = p.total > 0 ? Math.round((p.done / p.total) * 100) : 0;
           const s = sb[p.status];
           return (
-            <div key={p.name}
+            <div className="studio-project-row" key={p.name}
               style={{ background: "#13151C", border: "1px solid rgba(255,255,255,.08)", borderRadius: 10, padding: "14px 18px", transition: "border-color .15s, background .15s" }}
               onMouseEnter={e => { e.currentTarget.style.borderColor = "rgba(255,138,31,0.2)"; e.currentTarget.style.background = "#181B24"; }}
               onMouseLeave={e => { e.currentTarget.style.borderColor = "rgba(255,255,255,.08)"; e.currentTarget.style.background = "#13151C"; }}>
               <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                <div style={{ width: 36, height: 36, borderRadius: 8, display: "flex", alignItems: "center", justifyContent: "center", flexShrink: 0, background: "rgba(255,138,31,0.1)", border: "1px solid rgba(255,138,31,0.16)" }}>
-                  <Film style={{ width: 16, height: 16, color: gold } as React.CSSProperties} />
+                <div style={{ width: 44, height: 60, borderRadius: 6, position: "relative", overflow: "hidden", flexShrink: 0 }}>
+                  <ProjectCover name={p.name} />
                 </div>
                 <div style={{ flex: 1, minWidth: 0 }}>
                   <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 2 }}>
@@ -894,15 +716,21 @@ function ProjectListPage({ navigate, onSpacePick }: NavType & { onSpacePick: (de
 }
 // ─── Main App ────────────────────────────────────────────────────────────────
 export default function App() {
-  const params = new URLSearchParams(window.location.search);
+  const guardedSearch = guardGuestSearch(window.location.search);
+  if (guardedSearch !== window.location.search) window.history.replaceState(null, "", guardedSearch);
+  const params = new URLSearchParams(guardedSearch);
   const initialPage = (params.get("page") ?? "workspace") as PageId;
   const [currentPage, setCurrentPage] = useState<PageId>(initialPage);
+  const [, updateLocation] = useState(0);
 
   // App shell state
-  const [currentSpace, setCurrentSpace] = useState<"personal" | "team">(USER.currentSpace);
+  const [currentSpace, setCurrentSpace] = useState<"personal" | "team">(() =>
+    sessionStorage.getItem("xinghe-space") === "personal" ? "personal" : USER.currentSpace
+  );
   const [showSpacePicker, setShowSpacePicker] = useState(false);
   const [pendingNav, setPendingNav] = useState<PageId | null>(null);
   const [notifOpen, setNotifOpen] = useState(false);
+  const [readNoticeIds, setReadNoticeIds] = useState<Set<string>>(new Set());
   const [helpOpen, setHelpOpen] = useState(false);
   const [serviceOpen, setServiceOpen] = useState(false);
   const [feedbackOpen, setFeedbackOpen] = useState(false);
@@ -912,58 +740,124 @@ export default function App() {
     setShowSpacePicker(true);
   };
   const confirmSpace = (s: "personal" | "team") => {
+    const required = pendingNav === "my-tasks" ? "personal" : (pendingNav === "team" || pendingNav === "team-tasks") ? "team" : null;
+    if (required && required !== s) return;
+    sessionStorage.setItem("xinghe-space", s);
     setCurrentSpace(s);
     setShowSpacePicker(false);
-    if (pendingNav) {
-      const dest = pendingNav; setPendingNav(null); navigate(dest);
-    }
+    setPendingNav(null);
+    if (pendingNav && pendingNav !== currentPage) navigate(pendingNav);
+    else if (!pendingNav && s !== currentSpace &&
+      ["team", "team-tasks", "my-tasks", "billing", "result"].includes(currentPage)) navigate("workspace");
   };
 
-  const navigate = useCallback((page: PageId) => {
-    setCurrentPage(page);
+  const navigate = useCallback((page: PageId, extra?: Record<string, string | null>) => {
     setNotifOpen(false); setHelpOpen(false);
-    window.history.pushState(null, "", "?page=" + page);
+    // 切换页面时保留团队页签等查询参数
+    const params = new URLSearchParams(window.location.search);
+    // 用量子视图状态只在团队页、账单页与结果页有意义。
+    // 账单页与结果页保留这些参数，便于「返回用量」时恢复来源状态。
+    const keepsTeamState = ["team", "team-tasks", "my-tasks", "billing", "result"].includes(page);
+    if (!keepsTeamState) {
+      ["tab", "member", "focus", "source", "space", "view", "dfrom", "dto", "cat", "project", "model", "status", "q", "pg", "sort"].forEach(k => params.delete(k));
+    }
+    // 任务 ID 在团队、账单与结果页之间需要保留，用于互相定位
+    if (!keepsTeamState) params.delete("task");
+    if (page !== "result") params.delete("from");
+    if (page !== "canvas") params.delete("canvas");
+    if (page !== "projects") { params.delete("kind"); params.delete("create"); }
+    params.set("page", page);
+    // 额外的目标参数（如 task / from）
+    if (extra) {
+      Object.entries(extra).forEach(([k, v]) => {
+        if (v === null) params.delete(k);
+        else params.set(k, v);
+      });
+    }
+    const search = guardGuestSearch("?" + params.toString());
+    if (search !== window.location.search) window.history.pushState(null, "", search);
+    window.dispatchEvent(new PopStateEvent("popstate"));
   }, []);
+
+  /**
+   * 团队管理仅在团队空间下有数据。
+   * 从个人空间进入团队页时，先确认切换到团队空间。
+   */
+  const navWithSpace = useCallback((page: PageId) => {
+    if (((page === "team" || page === "team-tasks") && currentSpace !== "team") ||
+        (page === "my-tasks" && currentSpace !== "personal")) {
+      setPendingNav(page);
+      setShowSpacePicker(true);
+      return;
+    }
+    if (page !== currentPage) {
+      const cleared = Object.fromEntries(
+        ["tab", "view", "member", "focus", "dfrom", "dto", "cat", "project", "model", "status", "q", "pg", "sort", "task", "source", "space"]
+          .map(key => [key, null])
+      );
+      navigate(page, cleared);
+    }
+  }, [currentPage, currentSpace, navigate]);
 
   // Browser back/forward support
   useEffect(() => {
     const onPop = () => {
-      const p = new URLSearchParams(window.location.search).get("page") as PageId | null;
-      if (p) setCurrentPage(p);
+      const guarded = guardGuestSearch(window.location.search);
+      if (guarded !== window.location.search) window.history.replaceState(null, "", guarded);
+      const p = new URLSearchParams(guarded).get("page") as PageId | null;
+      setCurrentPage(p ?? "workspace");
+      updateLocation(version => version + 1);
     };
     window.addEventListener("popstate", onPop);
     return () => window.removeEventListener("popstate", onPop);
   }, []);
+
+  /**
+   * 直接以 ?page=team 打开时，若当前是个人空间，先弹出空间确认。
+   */
+  const requiredSpace = (currentPage === "team" || currentPage === "team-tasks") ? "team" : currentPage === "my-tasks" ? "personal" : null;
+  useEffect(() => {
+    if (requiredSpace && currentSpace !== requiredSpace) {
+      setPendingNav(currentPage);
+      setShowSpacePicker(true);
+    }
+  }, [currentPage, currentSpace, requiredSpace]);
 
   const isAppShell =
     currentPage !== "landing" && currentPage !== "register" && currentPage !== "verify" &&
     currentPage !== "onboarding" && currentPage !== "login" && currentPage !== "upgrade" &&
     currentPage !== "canvas";
 
-  const unread = NOTIFS.task.filter(n => !n.read).length + NOTIFS.invoice.filter(n => !n.read).length +
-                 NOTIFS.activity.filter(n => !n.read).length + NOTIFS.error.filter(n => !n.read).length;
+  const unread = notificationTasks(currentSpace).filter(task => !readNoticeIds.has(currentSpace + ":" + task.taskId)).length;
 
   const renderPage = () => {
+    if (requiredSpace && requiredSpace !== currentSpace) return null;
     switch (currentPage) {
+      case "my-tasks":          return <TaskRecordsPage key="personal" navigate={navigate} space="personal" />;
+      case "team-tasks":        return <TeamPage navigate={navigate} />;
       case "landing":           return <LandingPage navigate={navigate} />;
       case "login":             return <AuthPage navigate={navigate} />;
       case "register":          return <RegisterPage navigate={navigate} />;
       case "onboarding":        return <OnboardingPage navigate={navigate} />;
-      case "workspace":         return <WorkspacePage navigate={navigate} onSpacePick={openSpacePicker} />;
-      case "projects":          return <ProjectListPage navigate={navigate} onSpacePick={openSpacePicker} />;
+      case "membership":        return <MembershipPage key={currentSpace} currentSpace={currentSpace} />;
+      case "tools":             return <ToolsPage />;
+      case "workspace":         return <WorkspacePage navigate={navigate} onSpacePick={openSpacePicker} currentSpace={currentSpace} />;
+      case "projects":          return params.get("kind") === "canvas"
+        ? <CanvasListPage key={currentSpace} navigate={navigate} scope={currentSpace} />
+        : <ProjectListPage navigate={navigate} onSpacePick={openSpacePicker} />;
       case "new-project":       return <NewProjectPage navigate={navigate} />;
-      case "canvas":            return <CanvasPage navigate={navigate} />;
+      case "canvas":            return <CanvasPage key={params.get("canvas") ?? "cv0"} navigate={navigate} scope={currentSpace} />;
       case "team":              return <TeamPage navigate={navigate} />;
       case "batch":             return <BatchPage navigate={navigate} />;
-      case "result":            return <ResultPage navigate={navigate} />;
+      case "result":            return <ResultPage navigate={navigate} space={currentSpace} />;
       case "delivery":          return <DeliveryPage navigate={navigate} />;
       case "upgrade":           return <UpgradePage navigate={navigate} />;
       case "cost-confirm":      return <CostConfirmPage navigate={navigate} />;
       case "team-assets":       return <TeamAssetsPage navigate={navigate} />;
       case "assets":            return <TeamAssetsPage navigate={navigate} />;
-      case "billing":           return <BillingPage navigate={navigate} />;
-      case "user-center":       return <UserCenterPage navigate={navigate} />;
-      default:                  return <WorkspacePage navigate={navigate} onSpacePick={openSpacePicker} />;
+      case "billing":           return <BillingPage key={currentSpace} navigate={navigate} space={currentSpace} />;
+      case "user-center":       return <UserCenterPage key={currentSpace} navigate={navigate} currentSpace={currentSpace} />;
+      default:                  return <WorkspacePage navigate={navigate} onSpacePick={openSpacePicker} currentSpace={currentSpace} />;
     }
   };
 
@@ -971,17 +865,17 @@ export default function App() {
     <div style={{ width: "100vw", height: "100vh", display: "flex", flexDirection: "column", background: "#090A0E", overflow: "hidden" }}>
       {isAppShell ? (
         <>
-          <div style={{ flex: 1, display: "flex", overflow: "hidden" }}>
-            <Sidebar currentPage={currentPage} currentSpace={currentSpace}
-              onNavigate={navigate} onSpacePick={() => openSpacePicker()}
+          <div className="studio-shell" style={{ flex: 1, display: "flex", overflow: "hidden" }}>
+              <Sidebar currentPage={currentPage} currentSpace={currentSpace}
+                onNavigate={navWithSpace} onSpacePick={() => openSpacePicker()}
               onNotifToggle={() => { setNotifOpen(o => !o); setHelpOpen(false); }}
               onHelpToggle={()  => { setHelpOpen(o  => !o); setNotifOpen(false); }}
               unread={unread} serviceOpen={serviceOpen} />
             <div style={{ flex: 1, display: "flex", flexDirection: "column", overflow: "hidden", background: "#090A0E", minWidth: 0 }}>
               <AppHeader currentSpace={currentSpace}
-                onSpacePick={() => openSpacePicker()}
-                onOpenService={() => setServiceOpen(true)} />
-              <main style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
+                onMembership={() => navigate("membership")}
+                onSpacePick={() => openSpacePicker()} />
+              <main className="studio-main" data-page={currentPage} style={{ flex: 1, overflowY: "auto", minHeight: 0 }}>
                 {renderPage()}
               </main>
             </div>
@@ -990,14 +884,15 @@ export default function App() {
           {showSpacePicker && (
             <SpacePickerModal currentSpace={currentSpace}
               onConfirm={confirmSpace}
-              onClose={() => { setShowSpacePicker(false); setPendingNav(null); }} />
+              onClose={() => {
+                setShowSpacePicker(false);
+                setPendingNav(null);
+                if (requiredSpace && requiredSpace !== currentSpace) navigate("workspace");
+              }} />
           )}
-          {notifOpen && (
-            <>
-              <div style={{ position: "fixed", inset: 0, zIndex: 198 }} onClick={() => setNotifOpen(false)} />
-              <NotificationPanel onClose={() => setNotifOpen(false)} />
-            </>
-          )}
+          {notifOpen && <TaskNotifications scope={currentSpace} readIds={readNoticeIds}
+            onRead={ids => setReadNoticeIds(current => new Set([...current, ...ids]))}
+            onClose={() => setNotifOpen(false)} navigate={navigate} />}
           {helpOpen && (
             <HelpPopup
               onClose={() => setHelpOpen(false)}
@@ -1006,16 +901,16 @@ export default function App() {
             />
           )}
           {serviceOpen && <QRModal onClose={() => setServiceOpen(false)} />}
-          {feedbackOpen && <FeedbackModal onClose={() => setFeedbackOpen(false)} />}
         </>
       ) : (
         <>
           {currentPage === "canvas"
-            ? <div style={{ flex: 1, overflow: "hidden", position: "relative" }}><CanvasPage navigate={navigate} /></div>
+            ? <div style={{ flex: 1, overflow: "hidden", position: "relative" }}><CanvasPage key={params.get("canvas") ?? "cv0"} navigate={navigate} scope={currentSpace} /></div>
             : renderPage()
           }
         </>
       )}
+      <SupportWidget requested={feedbackOpen} onHandled={() => setFeedbackOpen(false)} />
     </div>
   );
 }

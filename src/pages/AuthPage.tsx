@@ -6,59 +6,32 @@
 
 import { useState } from "react";
 import {
-  Eye, EyeOff, Loader2, Sparkles, ArrowLeft,
+  Eye, EyeOff, Loader2, ArrowLeft,
 } from "lucide-react";
 import type { Nav } from "../shared";
+import { completeDemoLogin } from "../auth";
+import { AuthMotion } from "../components/AuthMotion";
 
 // ─── Left Brand Panel（对齐 Make AuthPage BrandPanel） ──────────────────────────
-function BrandPanel() {
+export function BrandPanel({ navigate }: Nav) {
   return (
-    <div style={{
+    <div className="auth-brand" style={{
       position: "relative",
       flex: 1,
       minHeight: "100vh",
-      background: "radial-gradient(ellipse at 30% 30%, #3a1810 0%, #1a0c08 50%, #0a0608 100%)",
+
       display: "flex",
       flexDirection: "column",
       justifyContent: "space-between",
       padding: "60px 64px",
       overflow: "hidden",
     }}>
-      {/* Glow blobs */}
-      <div style={{
-        position: "absolute", top: "20%", left: "10%", width: 480, height: 480,
-        borderRadius: "50%", background: "radial-gradient(circle, rgba(255,138,31,.35) 0%, transparent 70%)",
-        filter: "blur(80px)", pointerEvents: "none",
-      }} />
-      <div style={{
-        position: "absolute", bottom: "10%", right: "0%", width: 400, height: 400,
-        borderRadius: "50%", background: "radial-gradient(circle, rgba(255,80,16,.25) 0%, transparent 70%)",
-        filter: "blur(60px)", pointerEvents: "none",
-      }} />
-      {/* Grid overlay */}
-      <div style={{
-        position: "absolute", inset: 0, opacity: 0.04, pointerEvents: "none",
-        backgroundImage:
-          "linear-gradient(rgba(255,255,255,.5) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,.5) 1px, transparent 1px)",
-        backgroundSize: "48px 48px",
-      }} />
-
-      {/* Logo */}
-      <div style={{ position: "relative", zIndex: 1, display: "flex", alignItems: "center", gap: 12 }}>
-        <div style={{
-          width: 44, height: 44, borderRadius: 12,
-          background: "linear-gradient(135deg,#ff8c20,#ff5010)",
-          display: "flex", alignItems: "center", justifyContent: "center",
-        }}>
-          <Sparkles style={{ width: 22, height: 22, color: "#000" }} />
-        </div>
-        <span style={{ fontSize: 18, fontWeight: 700, color: "white", letterSpacing: "0.02em" }}>
-          星核耀火
-        </span>
-      </div>
+      <button type="button" onClick={() => navigate("landing")} className="auth-home-link" style={{ position: "relative", zIndex: 1, display: "inline-flex", alignItems: "center", alignSelf: "flex-start", gap: 10, padding: "10px 14px", borderRadius: 10, border: "1px solid rgba(255,255,255,.18)", background: "rgba(0,0,0,.2)", color: "white", cursor: "pointer", fontSize: 15 }}>
+        <ArrowLeft size={18} /> 返回首页
+      </button>
 
       {/* Hero copy */}
-      <div style={{ position: "relative", zIndex: 1, maxWidth: 480 }}>
+      <div className="auth-brand-copy" style={{ position: "relative", zIndex: 1, maxWidth: 480 }}>
         <div style={{
           display: "inline-flex", alignItems: "center", gap: 6,
           padding: "5px 14px", borderRadius: 100,
@@ -82,7 +55,7 @@ function BrandPanel() {
           剧本智能解析、AI 分镜规划、批量视频生成，一站式完成你的影视创作。接入 Seedance 2.0，效率提升 10 倍。
         </p>
         {/* Stats row */}
-        <div style={{ display: "flex", gap: 40 }}>
+        <div className="auth-brand-stats" style={{ display: "flex", gap: 40 }}>
           {[["10x", "创作效率"], ["500+", "活跃创作者"], ["50+", "参考素材"]].map(([v, l]) => (
             <div key={l}>
               <div style={{ fontSize: 22, fontWeight: 800, color: "white", marginBottom: 2 }}>{v}</div>
@@ -93,7 +66,7 @@ function BrandPanel() {
       </div>
 
       {/* Footer */}
-      <div style={{ position: "relative", zIndex: 1, fontSize: 12, color: "rgba(255,255,255,.3)" }}>
+      <div className="auth-brand-footer" style={{ position: "relative", zIndex: 1, fontSize: 12, color: "rgba(255,255,255,.3)" }}>
         © 2026 星核耀火 · 让创作更简单
       </div>
     </div>
@@ -112,7 +85,7 @@ function LoginCard({ navigate }: { navigate: Nav["navigate"] }) {
     if (!email.trim() || !pw) { setErr("请填写邮箱和密码"); return; }
     setLoading(true); setErr("");
     // 演示：模拟登录
-    setTimeout(() => { setLoading(false); navigate("workspace"); }, 1000);
+    setTimeout(() => { setLoading(false); const target = completeDemoLogin(); navigate(target.page, target.extra); }, 1000);
   };
 
   const inputStyle: React.CSSProperties = {
@@ -127,7 +100,7 @@ function LoginCard({ navigate }: { navigate: Nav["navigate"] }) {
     (e.currentTarget.style.borderColor = "rgba(255,255,255,.1)");
 
   return (
-    <div style={{
+    <div className="auth-login-card" style={{
       width: 460, padding: 40,
       background: "#14111f",
       border: "1px solid rgba(255,255,255,.08)",
@@ -234,21 +207,22 @@ function LoginCard({ navigate }: { navigate: Nav["navigate"] }) {
 // ─── Auth Page（Full-screen two-column）────────────────────────────────────────
 export function AuthPage({ navigate }: Nav) {
   return (
-    <div style={{
+    <div className="auth-layout auth-login-layout" style={{
       minHeight: "100vh", display: "flex", background: "#0a0912", fontFamily: "inherit",
     }}>
+      <AuthMotion />
       {/* Left brand panel */}
-      <BrandPanel />
+      <BrandPanel navigate={navigate} />
 
       {/* Right form area */}
-      <div style={{
+      <div className="auth-form" style={{
         flex: 1, minHeight: "100vh", display: "flex", flexDirection: "column",
         alignItems: "center", justifyContent: "center",
-        background: "linear-gradient(180deg, #100d1a 0%, #0a0710 100%)",
+        background: "transparent",
         padding: "40px 32px", position: "relative",
       }}>
         {/* Top bar */}
-        <div style={{ position: "absolute", top: 24, right: 32, display: "flex", alignItems: "center", gap: 16 }}>
+        <div className="auth-login-topbar" style={{ position: "absolute", top: 24, right: 32, display: "flex", alignItems: "center", gap: 16 }}>
           <span style={{ fontSize: 13, color: "rgba(255,255,255,.4)" }}>
             还没有账号？
           </span>
@@ -262,20 +236,6 @@ export function AuthPage({ navigate }: Nav) {
             立即注册
           </button>
         </div>
-
-        {/* Back link */}
-        <button
-          onClick={() => navigate("landing")}
-          style={{
-            position: "absolute", top: 24, left: 32,
-            padding: "8px 14px", borderRadius: 10, fontSize: 12.5,
-            background: "transparent", border: "1px solid rgba(255,255,255,.08)",
-            color: "rgba(255,255,255,.5)",
-            display: "flex", alignItems: "center", gap: 4, cursor: "pointer",
-          }}>
-          <ArrowLeft style={{ width: 13, height: 13 }} />
-          返回首页
-        </button>
 
         <LoginCard navigate={navigate} />
       </div>

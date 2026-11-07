@@ -7,9 +7,12 @@
 
 import { useState } from "react";
 import {
-  Eye, EyeOff, ChevronLeft, Loader2, RefreshCw,
+  Eye, EyeOff, Loader2, RefreshCw,
 } from "lucide-react";
 import type { Nav } from "../shared";
+import { completeDemoLogin } from "../auth";
+import { BrandPanel } from "./AuthPage";
+import { AuthMotion } from "../components/AuthMotion";
 
 export function RegisterPage({ navigate }: Nav) {
   const [showPw, setShowPw] = useState(false);
@@ -48,7 +51,8 @@ export function RegisterPage({ navigate }: Nav) {
     // 演示：模拟注册提交
     setTimeout(() => {
       setLoading(false);
-      navigate("onboarding");
+      const target = completeDemoLogin("onboarding");
+      navigate(target.page, target.extra);
     }, 1500);
   };
 
@@ -62,23 +66,14 @@ export function RegisterPage({ navigate }: Nav) {
   const onBlur  = (e: React.FocusEvent<HTMLInputElement>) => (e.currentTarget.style.borderColor = "rgba(255,255,255,.1)");
 
   return (
-    <div style={{
+    <div className="auth-layout" style={{
       minHeight: "100vh", background: "#090A0E",
       display: "flex", alignItems: "center", justifyContent: "center",
     }}>
-      <div style={{ width: "100%", maxWidth: 480, padding: "48px 24px" }}>
-
-        {/* 返回首页 */}
-        <button
-          onClick={() => navigate("landing")}
-          style={{
-            background: "none", border: "none", color: "rgba(255,255,255,.35)",
-            display: "flex", alignItems: "center", gap: 4, fontSize: 12,
-            cursor: "pointer", marginBottom: 32, padding: 0,
-          }}>
-          <ChevronLeft style={{ width: 14, height: 14 }} />
-          返回首页
-        </button>
+      <AuthMotion />
+      <BrandPanel navigate={navigate} />
+      <div className="auth-form" style={{ flex: 1, display: "flex", justifyContent: "center", padding: "32px 24px" }}>
+      <div style={{ width: "100%", maxWidth: 432, padding: "16px 0" }}>
 
         <h1 style={{ fontSize: 24, fontWeight: 800, color: "white", marginBottom: 4 }}>
           创建账号
@@ -262,6 +257,7 @@ export function RegisterPage({ navigate }: Nav) {
           </div>
 
         </div>
+      </div>
       </div>
     </div>
   );

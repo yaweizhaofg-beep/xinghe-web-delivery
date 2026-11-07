@@ -303,7 +303,7 @@ export default function TeamAssetsPage({ navigate, from, initialSelProj }: Props
     return (
       <>
       {modals}
-      <div style={{ padding: "20px 32px" }}>
+      <div className="studio-asset-page" style={{ padding: "20px 32px" }}>
         {/* Back */}
         <button
           onClick={() => {
@@ -1089,7 +1089,7 @@ export default function TeamAssetsPage({ navigate, from, initialSelProj }: Props
   return (
     <>
     {modals}
-    <div style={{ padding: "24px 28px", maxWidth: 1100, margin: "0 auto" }}>
+    <div className="studio-asset-page" style={{ padding: "24px 28px", maxWidth: 1100, margin: "0 auto" }}>
       <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", marginBottom: 24 }}>
         <div>
           <h1 style={{ fontSize: 20, fontWeight: 800, color: "white", marginBottom: 4 }}>团队资产</h1>

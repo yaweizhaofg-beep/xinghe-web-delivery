@@ -5,10 +5,17 @@ export type PageId =
   | "workspace" | "projects" | "new-project"
   | "assets" | "cost-confirm"
   | "batch" | "result" | "delivery" | "billing"
-  | "canvas" | "user-center"
-  | "team" | "team-assets" | "login" | "upgrade";
+  | "canvas" | "tools" | "membership" | "user-center"
+  | "team" | "my-tasks" | "team-tasks" | "team-assets" | "login" | "upgrade";
 
-export interface Nav { navigate: (p: PageId) => void; }
+export interface Nav {
+  /**
+   * 跳转页面。
+   * @param p 目标页面
+   * @param extra 额外查询参数；值为 null 时删除该参数
+   */
+  navigate: (p: PageId, extra?: Record<string, string | null>) => void;
+}
 
 // ─── Mock Data ────────────────────────────────────────────────────────────────
 export const USER = {
@@ -87,10 +94,10 @@ export const gold       = "#ffac30";
 
 // ─── Color Tokens ──────────────────────────────────────────────────────────────
 export const colors = {
-  bgPrimary: "#0a0912",
-  bgSecondary: "#12101a",
-  bgSurface: "#1a1725",
-  bgElevated: "#231f33",
+  bgPrimary: "#0d0e12",
+  bgSecondary: "#14151b",
+  bgSurface: "#1a1b22",
+  bgElevated: "#24252e",
   bgHover: "rgba(255,255,255,0.05)",
   bgActive: "rgba(255,138,31,0.1)",
   border: "rgba(255,255,255,0.07)",

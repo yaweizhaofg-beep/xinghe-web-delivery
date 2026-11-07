@@ -1,8 +1,10 @@
-# 星核耀火 · 网页版（前端交付）
+# 星核耀火Hub / Nova Tale Hub - Frontend delivery
 
 > AI 视频创作平台前端原型 —— 面向短剧 / 漫剧创作者的团队协作式创作平台
 
 本仓库是**唯一交付版本**，从独立仓库整理而来，只保留最终代码、运行所需配置与交付文档。所有旧目录与旧仓库保持原样，未做任何修改。
+
+Latest update and demo-service boundaries: [Delivery notes](docs/latest-delivery.md).
 
 ---
 

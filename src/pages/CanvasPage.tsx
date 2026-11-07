@@ -2,7 +2,7 @@
 // CanvasPage - 无限画布编辑器（对齐 Make gAlz60sm49QC7SQ6Kjb0X0 CanvasPage.tsx）
 // ═══════════════════════════════════════════════════════════════════════════════════
 
-import { useState, useRef, useCallback } from "react";
+import { useState, useRef, useCallback, useEffect } from "react";
 import {
   ChevronDown, Plus, Minus, X,
   Undo2, Redo2, Save,
@@ -15,6 +15,8 @@ import {
   BarChart3,
 } from "lucide-react";
 import { Nav } from "../shared";
+import { getCanvases } from "../canvases";
+import type { SpaceKind } from "../billing";
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 type NodeStatus = "idle" | "queued" | "running" | "done" | "error" | "partial";
@@ -22,14 +24,14 @@ type NodeKind = "text" | "image" | "video" | "audio" | "genImg" | "genVid" | "gr
 type Tool = "select" | "move" | "text" | "image" | "video" | "audio" | "genCfg" | "group" | "upload";
 type SidePaneTab = "elements" | "assets";
 
-interface CNode {
+export interface CNode {
   id: string; kind: NodeKind; label: string;
   x: number; y: number; w: number; h: number;
   status: NodeStatus; locked?: boolean; hidden?: boolean;
   content?: string;
   params?: Record<string, string | number>;
 }
-interface CEdge { from: string; to: string; }
+export interface CEdge { from: string; to: string; }
 
 // ─── Design Tokens (from Make) ────────────────────────────────────────────────
 const KIND_COLOR: Record<NodeKind, string> = {
@@ -894,11 +896,6 @@ function Minimap({ nodes, pan, zoom, canvasW, canvasH, onPan, onZoom }: {
 }
 
 // ─── Canvas list + team ───────────────────────────────────────────────────────
-const CANVAS_LIST = [
-  { id:"cv0", name:"《镜像》主创画布",  nodes:9,  updated:"今天 14:48" },
-  { id:"cv1", name:"星耀制作流程画布",  nodes:7,  updated:"今天 14:30" },
-  { id:"cv2", name:"《星坠》宣传物料",  nodes:3,  updated:"昨天 09:15" },
-];
 const TEAM_MEMBERS = [
   { id:1, name:"赵雅薇", avatar:"赵", role:"管理员",  online:true  },
   { id:2, name:"林子墨", avatar:"林", role:"管理员",  online:true  },
@@ -908,7 +905,8 @@ const TEAM_MEMBERS = [
 ];
 
 // ─── TopBar ───────────────────────────────────────────────────────────────────
-function TopBar({ name, onNameChange, navigate, nodeCount, edgeCount, onUndo, onRedo, creditUsed }: {
+function TopBar({ name, onNameChange, navigate, nodeCount, edgeCount, onUndo, onRedo, creditUsed, scope }: {
+  scope: SpaceKind;
   name:string; onNameChange:(v:string)=>void; navigate:Nav["navigate"];
   nodeCount:number; edgeCount:number;
   onUndo:()=>void; onRedo:()=>void; creditUsed:number;
@@ -917,7 +915,8 @@ function TopBar({ name, onNameChange, navigate, nodeCount, edgeCount, onUndo, on
   const [draft,        setDraft]        = useState(name);
   const [switcherOpen, setSwitcherOpen] = useState(false);
   const [teamOpen,     setTeamOpen]     = useState(false);
-  const [activeCanvas, setActiveCanvas] = useState("cv0");
+  const activeCanvas = new URLSearchParams(window.location.search).get("canvas") ?? "cv0";
+  const CANVAS_LIST = getCanvases(scope);
 
   return (
     <div style={{ height:52, flexShrink:0, display:"flex", alignItems:"center",
@@ -927,7 +926,7 @@ function TopBar({ name, onNameChange, navigate, nodeCount, edgeCount, onUndo, on
       onClick={() => { setSwitcherOpen(false); setTeamOpen(false); }}>
 
       {/* Close */}
-      <button onClick={e=>{e.stopPropagation();navigate("workspace");}} title="关闭画布"
+      <button onClick={e=>{e.stopPropagation();navigate("projects", { kind: "canvas" });}} title="关闭画布"
         style={{ width:28, height:28, borderRadius:7, display:"flex", alignItems:"center",
           justifyContent:"center", background:"rgba(255,255,255,.06)", border:`1px solid rgba(255,255,255,.1)`,
           backdropFilter:"blur(8px)", color:S.t3, cursor:"pointer", flexShrink:0 }}
@@ -971,7 +970,7 @@ function TopBar({ name, onNameChange, navigate, nodeCount, edgeCount, onUndo, on
               <span style={{ fontSize:10, fontWeight:700, letterSpacing:"0.08em", color:S.t4, textTransform:"uppercase" }}>切换画布</span>
             </div>
             {CANVAS_LIST.map(cv => (
-              <button key={cv.id} onClick={() => { setActiveCanvas(cv.id); onNameChange(cv.name); setSwitcherOpen(false); }}
+              <button key={cv.id} onClick={() => { navigate("canvas", { canvas: cv.id }); setSwitcherOpen(false); }}
                 style={{ width:"100%", display:"flex", alignItems:"center", gap:10, padding:"9px 12px",
                   background:"none", border:"none", cursor:"pointer", textAlign:"left" }}
                 onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="rgba(255,255,255,.06)";}}
@@ -990,7 +989,7 @@ function TopBar({ name, onNameChange, navigate, nodeCount, edgeCount, onUndo, on
               </button>
             ))}
             <div style={{ margin:"4px 8px", height:1, background:S.bdr }}/>
-            <button onClick={() => setSwitcherOpen(false)}
+            <button onClick={() => { setSwitcherOpen(false); navigate("projects", { kind: "canvas", create: "1" }); }}
               style={{ width:"100%", display:"flex", alignItems:"center", gap:8, padding:"8px 12px",
                 background:"none", border:"none", cursor:"pointer", color:S.gold, fontSize:12.5, fontWeight:600 }}
               onMouseEnter={e=>{(e.currentTarget as HTMLElement).style.background="rgba(255,255,255,.06)";}}
@@ -1132,9 +1131,11 @@ const TOOL_KIND: Partial<Record<Tool,NodeKind>> = {
   text:"text",image:"image",video:"video",audio:"audio",genCfg:"genImg",group:"group",
 };
 
-export default function CanvasPage({ navigate }: Nav) {
-  const [nodes,       setNodes]       = useState<CNode[]>(INIT_NODES);
-  const [edges]                       = useState<CEdge[]>(INIT_EDGES);
+export default function CanvasPage({ navigate, scope }: Nav & { scope: SpaceKind }) {
+  const canvasId = new URLSearchParams(window.location.search).get("canvas") ?? "cv0";
+  const info = getCanvases(scope).find(canvas => canvas.id === canvasId);
+  const [nodes, setNodes] = useState<CNode[]>(() => info?.nodesData ?? INIT_NODES.slice(0, info?.nodes ?? INIT_NODES.length));
+  const [edges] = useState<CEdge[]>(() => info?.edgesData ?? INIT_EDGES.filter(edge => nodes.some(node => node.id === edge.from) && nodes.some(node => node.id === edge.to)));
   const [pan,         setPan]         = useState({x:40,y:40});
   const [zoom,        setZoom]        = useState(0.85);
   const [selectedId,  setSelectedId]  = useState<string|null>(null);
@@ -1145,7 +1146,7 @@ export default function CanvasPage({ navigate }: Nav) {
   const [panStart,    setPanStart]    = useState({x:0,y:0});
   const [panOrig,     setPanOrig]     = useState({x:0,y:0});
   const [connectFrom, setConnectFrom] = useState<{nodeId:string;side:"left"|"right"}|null>(null);
-  const [canvasName,  setCanvasName]  = useState("《镜像》主创画布");
+  const [canvasName,  setCanvasName]  = useState(info?.name ?? "《镜像》主创画布");
   const [sideOpen,    setSideOpen]    = useState(true);
   const [sideTab,     setSideTab]     = useState<SidePaneTab>("elements");
   const [ctxMenu,     setCtxMenu]     = useState<CtxMenu|null>(null);
@@ -1153,6 +1154,13 @@ export default function CanvasPage({ navigate }: Nav) {
   const nodeCounter = useRef(10);
   const canvasRef   = useRef<HTMLDivElement>(null);
   const fileInputRef= useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    if (info) {
+      info.name = canvasName; info.nodes = nodes.length; info.edges = edges.length;
+      info.nodesData = nodes; info.edgesData = edges;
+    }
+  }, [info, canvasName, nodes, edges]);
 
   const onWheel = useCallback((e:React.WheelEvent)=>{
     e.preventDefault();
@@ -1285,7 +1293,7 @@ export default function CanvasPage({ navigate }: Nav) {
       <input ref={fileInputRef} type="file" accept="image/*,video/*,audio/*" multiple
         style={{ display:"none" }} onChange={() => {}}/>
 
-      <TopBar name={canvasName} onNameChange={setCanvasName} navigate={navigate}
+      <TopBar scope={scope} name={canvasName} onNameChange={setCanvasName} navigate={navigate}
         nodeCount={nodes.length} edgeCount={edges.length}
         onUndo={() => {}} onRedo={() => {}} creditUsed={60}/>
 

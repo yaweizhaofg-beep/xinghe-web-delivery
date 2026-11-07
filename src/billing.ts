@@ -69,9 +69,9 @@ export const PLANS: Plan[] = [
     price: 599,
     stars: 6100,
     seats: 1,
-    concurrencyPerSeat: 8,
+    concurrencyPerSeat: 4,
     storageGb: 3,
-    perks: ["全创作模式", "1 人使用", "每席位最多同时运行 8 个任务", "3GB 存储"],
+    perks: ["全创作模式", "1 人使用", "每席位最多同时运行 4 个任务", "3GB 存储"],
     hot: true,
     tag: "推荐",
   },
@@ -84,7 +84,7 @@ export const PLANS: Plan[] = [
     seats: 5,
     concurrencyPerSeat: 4,
     storageGb: 100,
-    perks: ["全创作模式", "5 人协作", "每席位最多同时运行 4 个任务", "100GB 共享存储", "团队资产库", "项目共创"],
+    perks: ["全创作模式", "5 人协作", "全团队最多同时运行 4 个任务", "100GB 共享存储", "团队资产库", "项目共创"],
     hot: true,
     tag: "推荐",
   },
@@ -97,7 +97,7 @@ export const PLANS: Plan[] = [
     seats: 10,
     concurrencyPerSeat: 8,
     storageGb: 1024,
-    perks: ["全创作模式", "10 人协作", "每席位最多同时运行 8 个任务", "1TB 共享存储", "团队资产库", "项目共创"],
+    perks: ["全创作模式", "10 人协作", "全团队最多同时运行 8 个任务", "1TB 共享存储", "团队资产库", "项目共创"],
   },
 ];
 
@@ -110,7 +110,7 @@ export function findPlan(id: string): Plan | undefined {
 }
 
 /** 席位上限不等于独占算力 —— 全站统一文案 */
-export const CONCURRENCY_DISCLAIMER = "每人最多同时运行 {N} 个任务，高峰期可能排队";
+export const CONCURRENCY_DISCLAIMER = "当前空间最多同时运行 {N} 个任务，高峰期可能排队";
 
 /** 存储容量文案（团队为共享） */
 export function storageLabel(plan: Plan): string {
@@ -290,7 +290,7 @@ export function computeUpgrade(fromPlan: Plan, toPlan: Plan, remainingSeconds: n
 
   const benefitChanges: UpgradeQuote["benefitChanges"] = [
     { label: "席位上限", from: `${fromPlan.seats} 人`, to: `${toPlan.seats} 人` },
-    { label: "每席位并发", from: `${fromPlan.concurrencyPerSeat}`, to: `${toPlan.concurrencyPerSeat}` },
+    { label: "同时运行任务", from: `${fromPlan.concurrencyPerSeat}`, to: `${toPlan.concurrencyPerSeat}` },
     { label: "存储容量", from: storageLabel(fromPlan), to: storageLabel(toPlan) },
   ];
   if (fromPlan.scope === toPlan.scope && fromPlan.scope === "team") {
@@ -447,7 +447,7 @@ export function getAssignableBalance(): number {
  * 返回是否成功（false 表示超出可分配余额）。
  */
 export function allocateToMember(memberId: number, stars: number): boolean {
-  if (stars < 0) return false;
+  if (!Number.isFinite(stars) || stars < 0) return false;
   const alloc = getAllocation(memberId);
   const delta = stars - alloc.allocated;
   if (delta > getAssignableBalance()) return false;
@@ -457,12 +457,62 @@ export function allocateToMember(memberId: number, stars: number): boolean {
   return true;
 }
 
-/** 回收成员的全部额度（回到团队可分配余额） */
-export function revokeAllocation(memberId: number): void {
+/**
+ * 回收成员额度 —— 演示口径（见《团队管理改造方案》§3 星石管理）。
+ *
+ * 与旧版 `revokeAllocation()` 的区别：
+ *   - 旧版把分配值清零，待分配余额按旧上限全额增加（会把已消耗部分也放回待分配）。
+ *   - 本版**只释放未使用额度**：新分配上限 = 已消耗额，
+ *     待分配余额只增加 `max(0, 原分配 − 已消耗)`。
+ *
+ * 例：分配 2,000、已用 1,240 → 回收后分配上限 1,240，待分配增加 760，
+ *     团队钱包余额不变，已用部分继续占用该成员的额度记录。
+ *
+ * ⚠️ 生产结算口径待确认：接真实结算前需确认钱包余额是否已扣同一笔历史消耗，
+ *    以免重复占用。正式实现应以结算后的实际可用余额和预留金额为准。
+ */
+export function revokeAllocation(memberId: number): { released: number; kept: number } {
   const alloc = getAllocation(memberId);
-  alloc.allocated = 0;
+  const released = Math.max(0, alloc.allocated - alloc.used);
+  const kept = alloc.used;
+  alloc.allocated = kept;
   alloc.updatedAt = new Date().toISOString().slice(0, 16).replace("T", " ");
   emitWallet();
+  return { released, kept };
+}
+
+/**
+ * 按方案口径设置成员额度上限（供额度弹窗保存使用）。
+ * 降低上限时不得低于已消耗额；增加时不得超过团队待分配余额。
+ *
+ * @returns { ok: true } | { ok: false, reason }
+ */
+export function setAllocationLimit(
+  memberId: number,
+  stars: number,
+): { ok: true } | { ok: false; reason: string } {
+  if (!Number.isFinite(stars)) return { ok: false, reason: "请输入有效额度" };
+  if (stars < 0) return { ok: false, reason: "额度不能为负数" };
+  const alloc = getAllocation(memberId);
+  if (stars < alloc.used) {
+    return { ok: false, reason: `额度上限不能低于已消耗 ${alloc.used.toLocaleString()} 星石` };
+  }
+  const delta = stars - alloc.allocated;
+  if (delta > getAssignableBalance()) {
+    return { ok: false, reason: `超出团队待分配额度 ${getAssignableBalance().toLocaleString()} 星石` };
+  }
+  alloc.allocated = stars;
+  alloc.updatedAt = new Date().toISOString().slice(0, 16).replace("T", " ");
+  emitWallet();
+  return { ok: true };
+}
+
+/**
+ * 移除成员时释放其额度（演示口径：只释放未用部分）。
+ * 已消耗记录保留在额度历史中，不回滚。
+ */
+export function releaseMemberAllocation(memberId: number): { released: number; kept: number } {
+  return revokeAllocation(memberId);
 }
 
 /** 成员分配状态 */

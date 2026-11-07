@@ -39,7 +39,7 @@ export function NewProjectPage({ navigate, onStart }: NavType & { onStart?: () =
   };
 
   return (
-    <div style={{
+    <div className="studio-create" style={{
       height: "100%", display: "flex", flexDirection: "column",
       padding: "18px 24px", boxSizing: "border-box", overflow: "hidden",
       background: "linear-gradient(150deg,#09090D 0%,#0C0D13 60%,#08090E 100%)",
@@ -52,7 +52,7 @@ export function NewProjectPage({ navigate, onStart }: NavType & { onStart?: () =
         background: "radial-gradient(ellipse,rgba(167,139,250,0.04) 0%,transparent 70%)", pointerEvents: "none" }} />
 
       {/* Breadcrumb */}
-      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, position: "relative", flexShrink: 0 }}>
+      <div className="studio-create-breadcrumb" style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14, position: "relative", flexShrink: 0 }}>
         <button onClick={() => navigate("projects")}
           style={{ background: "none", border: "none", color: "#A4A8B3", cursor: "pointer", fontSize: 13, padding: 0 }}>
           剧目创作
@@ -62,10 +62,10 @@ export function NewProjectPage({ navigate, onStart }: NavType & { onStart?: () =
       </div>
 
       {/* Main grid */}
-      <div style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12, minHeight: 0, position: "relative", maxWidth: 860, width: "100%", margin: "0 auto" }}>
+      <div className="studio-create-content" style={{ flex: 1, display: "flex", flexDirection: "column", gap: 12, minHeight: 0, position: "relative", maxWidth: 860, width: "100%", margin: "0 auto" }}>
 
         {/* LEFT COLUMN */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
+        <div className="studio-create-form" style={{ display: "flex", flexDirection: "column", gap: 12, minHeight: 0 }}>
 
           {/* Project name */}
           <div style={{ flexShrink: 0 }}>
@@ -79,7 +79,7 @@ export function NewProjectPage({ navigate, onStart }: NavType & { onStart?: () =
           </div>
 
           {/* Upload area */}
-          <div style={{
+          <div className="studio-upload-panel" style={{
             flex: 1, minHeight: 0, borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)",
             background: "rgba(255,255,255,0.025)", backdropFilter: "blur(20px)", overflow: "hidden",
             display: "flex", flexDirection: "column",
@@ -107,7 +107,7 @@ export function NewProjectPage({ navigate, onStart }: NavType & { onStart?: () =
                   </button>
                 </div>
               ) : (
-                <label style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10,
+                <label className="studio-dropzone" style={{ flex: 1, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", gap: 10,
                   borderRadius: 10, border: "1.5px dashed rgba(255,255,255,0.09)", cursor: "pointer", transition: "all .2s", position: "relative", overflow: "hidden" }}
                   onMouseEnter={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = activeMode.color + "50"; el.style.background = `${activeMode.color}06`; }}
                   onMouseLeave={e => { const el = e.currentTarget as HTMLElement; el.style.borderColor = "rgba(255,255,255,0.09)"; el.style.background = "transparent"; }}>
@@ -132,7 +132,7 @@ export function NewProjectPage({ navigate, onStart }: NavType & { onStart?: () =
           </div>
 
           {/* Settings row */}
-          <div style={{
+          <div className="studio-create-settings" style={{
             flexShrink: 0, borderRadius: 12, border: "1px solid rgba(255,255,255,0.08)",
             background: "rgba(255,255,255,0.025)", backdropFilter: "blur(12px)", padding: "11px 14px",
           }}>
@@ -186,7 +186,7 @@ export function NewProjectPage({ navigate, onStart }: NavType & { onStart?: () =
 
           {/* CTA */}
           <div style={{ flexShrink: 0 }}>
-            <button
+            <button className="studio-create-submit"
               disabled={!ready}
               onClick={() => { onStart?.(); navigate("team-assets"); }}
               style={{
